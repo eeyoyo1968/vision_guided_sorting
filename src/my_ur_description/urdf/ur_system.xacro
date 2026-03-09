@@ -1,0 +1,242 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://wiki.ros.org/xacro" name="ur">
+  <xacro:arg name="use_fake_hardware" default="false" />
+  <xacro:arg name="robot_ip" default="127.0.0.1" />
+   
+  <xacro:arg name="external_interface_adapter" default="false" />
+  <xacro:include filename="$(find ur_description)/urdf/ur_macro.xacro"/>
+  <xacro:include filename="$(find robotiq_description)/urdf/robotiq_2f_85_macro.urdf.xacro"/>
+
+  <link name="world"/>
+
+  <link name="easydesk">
+    <visual>
+      <geometry><box size="0.8 1.2 0.05"/></geometry>
+      <material name="light_grey"><color rgba="0.7 0.7 0.7 1"/></material>
+    </visual>
+    <collision>
+      <geometry><box size="0.8 1.2 0.05"/></geometry>
+    </collision>
+  </link>
+
+  <joint name="world_to_desk" type="fixed">
+    <parent link="world"/><child link="easydesk"/>
+    <origin xyz="0 0.73 0.9" rpy="0 0 0"/>
+  </joint>
+
+  <link name="front_wall">
+    <collision><geometry><box size="1.4 0.01 1.5"/></geometry></collision>
+    <visual>
+      <geometry><box size="1.4 0.01 1.5"/></geometry>
+      <material name="transparent_red"><color rgba="1 0 0 0.05"/></material>
+    </visual>
+  </link>
+  <joint name="desk_to_front_wall" type="fixed">
+    <parent link="easydesk"/><child link="front_wall"/>
+    <origin xyz="-0.00 0.6 0.75" rpy="0 0 0"/> 
+  </joint>
+
+  <link name="back_wall">
+    <collision><geometry><box size="1.4 0.01 1.5"/></geometry></collision>
+    <visual>
+      <geometry><box size="1.4 0.01 1.5"/></geometry>
+      <material name="transparent_red"><color rgba="1 0 0 0.05"/></material>
+    </visual>
+  </link>
+  <joint name="desk_to_back_wall" type="fixed">
+    <parent link="easydesk"/><child link="back_wall"/>
+    <origin xyz="-0.00 -1.4 0.75" rpy="0 0 0"/> 
+  </joint>
+
+  <link name="left_wall">
+    <collision><geometry><box size="0.01 2.25 1.5"/></geometry></collision>
+    <visual>
+      <geometry><box size="0.01 2.25 1.5"/></geometry>
+      <material name="transparent_red"><color rgba="1 0 0 0.05"/></material>
+    </visual>
+  </link>
+  <joint name="desk_to_left_wall" type="fixed">
+    <parent link="easydesk"/><child link="left_wall"/>
+    <origin xyz="-0.6 -0.5 0.75" rpy="0 0 0"/> 
+  </joint>
+
+  <link name="right_wall">
+    <collision><geometry><box size="0.01 2.25 1.5"/></geometry></collision>
+    <visual>
+      <geometry><box size="0.01 2.25 1.5"/></geometry>
+      <material name="transparent_red"><color rgba="1 0 0 0.05"/></material>
+    </visual>
+  </link>
+  <joint name="desk_to_right_wall" type="fixed">
+    <parent link="easydesk"/><child link="right_wall"/>
+    <origin xyz="0.7 -0.5 0.75" rpy="0 0 0"/> 
+  </joint>
+
+  <xacro:macro name="d435_mount" params="prefix x y z yaw">
+    <link name="${prefix}_camera_link">
+      <visual>
+        <origin xyz="0 0 0" rpy="${pi/2} 0 ${pi/2}"/>
+        <geometry>
+          <mesh filename="package://realsense2_description/meshes/d435.dae" />
+        </geometry>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="${pi/2} 0 ${pi/2}"/>
+        <geometry><box size="0.09 0.025 0.025"/></geometry>
+      </collision>
+    </link>
+
+    <joint name="desk_to_${prefix}_cam" type="fixed">
+      <parent link="easydesk"/><child link="${prefix}_camera_link"/>
+      <origin xyz="${x} ${y} ${z}" rpy="0 0.5 ${yaw}"/> 
+    </joint>
+
+    <link name="${prefix}_camera_optical_frame"/>
+    <joint name="${prefix}_optical_joint" type="fixed">
+      <parent link="${prefix}_camera_link"/>
+      <child link="${prefix}_camera_optical_frame"/>
+      <origin xyz="0 0 0" rpy="${-pi/2} 0 ${-pi/2}"/>
+    </joint>
+  </xacro:macro> 
+
+  <xacro:d435_mount prefix="cam_left" x="0.4" y="+0.2" z="0.3" yaw="${pi}"/>
+  <xacro:d435_mount prefix="cam_right" x="0.02" y="0.6" z="0.6" yaw="${-pi/2}"/>
+  
+<xacro:ur_robot name="ur" tf_prefix="" parent="easydesk"
+    joint_limits_parameters_file="$(find ur_description)/config/ur12e/joint_limits.yaml"
+    kinematics_parameters_file="$(find ur_description)/config/ur12e/default_kinematics.yaml"
+    physical_parameters_file="$(find ur_description)/config/ur12e/physical_parameters.yaml"
+    visual_parameters_file="$(find ur_description)/config/ur12e/visual_parameters.yaml"
+    safety_limits="false"
+    safety_pos_margin="0.15"
+    safety_k_position="20"
+    generate_ros2_control_tag="false">
+    <origin xyz="+0.05 -0.73 -0.025" rpy="0 0 0" />
+  </xacro:ur_robot>
+
+  <xacro:robotiq_gripper name="robotiq_85" prefix="" parent="tool0" include_ros2_control="false">
+    <origin xyz="0 0 0" rpy="0 0 0" />
+  </xacro:robotiq_gripper>  
+
+
+
+
+  <ros2_control name="URHardwareInterface" type="system">
+    <hardware>
+      <xacro:if value="$(arg use_fake_hardware)">
+        <plugin>mock_components/GenericSystem</plugin>
+        <param name="calculate_dynamics">true</param>
+      </xacro:if>
+      <xacro:unless value="$(arg use_fake_hardware)">
+        <plugin>ur_robot_driver/URPositionHardwareInterface</plugin>
+        <param name="robot_ip">$(arg robot_ip)</param>
+        <param name="keep_alive_count">2</param>
+
+        <param name="servoj_gain">2000</param>
+        <param name="servoj_lookahead_time">0.03</param>
+
+        <param name="reverse_port">50001</param>
+        <param name="script_sender_port">50002</param>
+        <param name="trajectory_port">50003</param>
+        <param name="script_command_port">50004</param>
+
+        <param name="headless_mode">false</param>
+        <param name="tf_prefix"></param>
+
+        <param name="script_filename">$(find ur_client_library)/resources/external_control.urscript</param>
+        <param name="output_recipe_filename">$(find ur_robot_driver)/resources/rtde_output_recipe.txt</param>
+        <param name="input_recipe_filename">$(find ur_robot_driver)/resources/rtde_input_recipe.txt</param>
+      </xacro:unless>
+    </hardware>
+    <joint name="shoulder_pan_joint">
+      <command_interface name="position"/>
+      <command_interface name="velocity"/>
+      <state_interface name="position"><param name="initial_value">4.7124</param></state_interface>
+      <state_interface name="velocity"/>
+      <state_interface name="effort"/> 
+    </joint>
+    <joint name="shoulder_lift_joint">
+      <command_interface name="position"/>
+      <command_interface name="velocity"/>
+      <state_interface name="position"><param name="initial_value">-0.5236</param></state_interface>
+      <state_interface name="velocity"/>
+      <state_interface name="effort"/> 
+    </joint>
+    <joint name="elbow_joint">
+      <command_interface name="position"/>
+      <command_interface name="velocity"/>
+      <state_interface name="position"><param name="initial_value">-2.618</param></state_interface>
+      <state_interface name="velocity"/>
+      <state_interface name="effort"/> 
+    </joint>
+    <joint name="wrist_1_joint">
+      <command_interface name="position"/>
+      <command_interface name="velocity"/>
+      <state_interface name="position"><param name="initial_value">-1.5707</param></state_interface>
+      <state_interface name="velocity"/>
+      <state_interface name="effort"/> 
+    </joint>
+    <joint name="wrist_2_joint">
+      <command_interface name="position"/>
+      <command_interface name="velocity"/>
+      <state_interface name="position"><param name="initial_value">1.5707</param></state_interface>
+      <state_interface name="velocity"/>
+      <state_interface name="effort"/> 
+    </joint>
+    <joint name="wrist_3_joint">
+      <command_interface name="position"/>
+      <command_interface name="velocity"/>
+      <state_interface name="position"><param name="initial_value">0.0</param></state_interface>
+      <state_interface name="velocity"/>
+      <state_interface name="effort"/> 
+    </joint>
+  </ros2_control>
+
+  <ros2_control name="RobotiqGripperHardwareInterface" type="system">
+    <hardware>
+      <xacro:if value="$(arg use_fake_hardware)">
+        <plugin>mock_components/GenericSystem</plugin>
+      </xacro:if>
+    
+      <xacro:unless value="$(arg use_fake_hardware)">
+         <plugin>mock_components/GenericSystem</plugin>
+      </xacro:unless>
+    </hardware>
+
+    <joint name="robotiq_85_left_knuckle_joint">
+      <command_interface name="position" />
+      <state_interface name="position">
+        <param name="initial_value">0.795</param>
+      </state_interface>
+      <state_interface name="velocity"/>
+    </joint>
+    
+    <joint name="robotiq_85_right_knuckle_joint">
+      <param name="mimic">robotiq_85_left_knuckle_joint</param>
+      <param name="multiplier">-1.0</param>
+      <state_interface name="position"/>
+    </joint>
+    <joint name="robotiq_85_left_inner_knuckle_joint">
+      <param name="mimic">robotiq_85_left_knuckle_joint</param>
+      <param name="multiplier">1.0</param>
+      <state_interface name="position"/>
+    </joint>
+    <joint name="robotiq_85_right_inner_knuckle_joint">
+      <param name="mimic">robotiq_85_left_knuckle_joint</param>
+      <param name="multiplier">-1.0</param>
+      <state_interface name="position"/>
+    </joint>
+    <joint name="robotiq_85_left_finger_tip_joint">
+      <param name="mimic">robotiq_85_left_knuckle_joint</param>
+      <param name="multiplier">-1.0</param>
+      <state_interface name="position"/>
+    </joint>
+    <joint name="robotiq_85_right_finger_tip_joint">
+      <param name="mimic">robotiq_85_left_knuckle_joint</param>
+      <param name="multiplier">1.0</param>
+      <state_interface name="position"/>
+    </joint>
+  </ros2_control>
+
+
+</robot>

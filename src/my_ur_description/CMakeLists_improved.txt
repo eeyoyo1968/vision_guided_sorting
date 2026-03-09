@@ -1,0 +1,28 @@
+cmake_minimum_required(VERSION 3.8)
+project(my_ur_description)
+
+if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  add_compile_options(-Wall -Wextra -Wpedantic)
+endif()
+
+# Find dependencies
+find_package(ament_cmake REQUIRED)
+
+# Install directories
+install(DIRECTORY 
+  urdf 
+  srdf 
+  config 
+  launch 
+  rviz
+  DESTINATION share/${PROJECT_NAME}
+)
+
+# Install Python scripts as executables
+# This makes them available via 'ros2 run my_ur_description <script_name>'
+install(PROGRAMS
+  scripts/test_move_xyz_theta_noflip_gmove.py
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+ament_package()

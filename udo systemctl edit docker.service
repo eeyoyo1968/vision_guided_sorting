@@ -1,0 +1,12 @@
+[0;1;32m●[0m docker.socket - Docker Socket for the API
+     Loaded: loaded (]8;;file://yoyo-Swift-SFX14-41G/usr/lib/systemd/system/docker.socket/usr/lib/systemd/system/docker.socket]8;;; [0;1;32menabled[0m; preset: [0;1;32menabled[0m)
+     Active: [0;1;32mactive (running)[0m since Wed 2026-01-14 01:33:55 GMT; 11s ago
+   Triggers: [0;1;32m●[0m docker.service
+     Listen: /run/docker.sock (Stream)
+      Tasks: 0 (limit: 18311)
+     Memory: 0B (peak: 256.0K)
+        CPU: 1ms
+     CGroup: /system.slice/docker.socket
+
+Jan 14 01:33:55 yoyo-Swift-SFX14-41G systemd[1]: Starting docker.socket - Docker Socket for the API...
+Jan 14 01:33:55 yoyo-Swift-SFX14-41G systemd[1]: Listening on docker.socket - Docker Socket for the API.

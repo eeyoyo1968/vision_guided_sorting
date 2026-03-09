@@ -1,0 +1,52 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <n>my_ur_description</n>
+  <version>1.0.0</version>
+  <description>UR12e workcell with Robotiq 2F-85 gripper, desk, walls, and cameras</description>
+  <maintainer email="your.email@example.com">Your Name</maintainer>
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <!-- Robot Description Dependencies -->
+  <exec_depend>ur_description</exec_depend>
+  <exec_depend>robotiq_description</exec_depend>
+  <exec_depend>realsense2_description</exec_depend>
+  
+  <!-- UR Robot Driver -->
+  <exec_depend>ur_robot_driver</exec_depend>
+  <exec_depend>ur_client_library</exec_depend>
+  
+  <!-- ROS2 Control Framework -->
+  <exec_depend>controller_manager</exec_depend>
+  <exec_depend>ros2_control</exec_depend>
+  <exec_depend>ros2_controllers</exec_depend>
+  
+  <!-- Specific Controllers -->
+  <exec_depend>joint_state_broadcaster</exec_depend>
+  <exec_depend>joint_trajectory_controller</exec_depend>
+  <exec_depend>ur_controllers</exec_depend>
+  
+  <!-- Hardware Interface -->
+  <exec_depend>hardware_interface</exec_depend>
+  <exec_depend>mock_components</exec_depend>
+  
+  <!-- MoveIt2 -->
+  <exec_depend>moveit_ros_move_group</exec_depend>
+  <exec_depend>moveit_ros_planning_interface</exec_depend>
+  <exec_depend>moveit_kinematics</exec_depend>
+  <exec_depend>moveit_planners_ompl</exec_depend>
+  <exec_depend>moveit_simple_controller_manager</exec_depend>
+  <exec_depend>moveit_configs_utils</exec_depend>
+  
+  <!-- Utilities -->
+  <exec_depend>robot_state_publisher</exec_depend>
+  <exec_depend>xacro</exec_depend>
+  <exec_depend>rviz2</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

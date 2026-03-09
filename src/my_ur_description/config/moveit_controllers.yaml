@@ -1,0 +1,29 @@
+/**:
+  ros__parameters:
+    controller_names:
+      - joint_trajectory_controller  # Use this for Simulation
+      - scaled_joint_trajectory_controller # Use this for Real/URSim
+
+    joint_trajectory_controller:
+      type: FollowJointTrajectory
+      action_ns: follow_joint_trajectory
+      default: True
+      joints:
+        - shoulder_pan_joint
+        - shoulder_lift_joint
+        - elbow_joint
+        - wrist_1_joint
+        - wrist_2_joint
+        - wrist_3_joint
+
+    scaled_joint_trajectory_controller:
+      type: FollowJointTrajectory
+      action_ns: follow_joint_trajectory
+      default: True
+      joints:
+        - shoulder_pan_joint
+        - shoulder_lift_joint
+        - elbow_joint
+        - wrist_1_joint
+        - wrist_2_joint
+        - wrist_3_joint

@@ -1,0 +1,45 @@
+diff --git a/ur_robot_driver/config/ur_controllers.yaml b/ur_robot_driver/config/ur_controllers.yaml
+index 51ed654..fdd46bc 100644
+--- a/ur_robot_driver/config/ur_controllers.yaml
++++ b/ur_robot_driver/config/ur_controllers.yaml
+@@ -48,6 +48,9 @@ controller_manager:
+     tool_contact_controller:
+       type: ur_controllers/ToolContactController
+ 
++    robotiq_gripper_controller:
++      type: joint_trajectory_controller/JointTrajectoryController
++
+ speed_scaling_state_broadcaster:
+   ros__parameters:
+     state_publish_rate: 100.0
+@@ -196,3 +199,16 @@ tcp_pose_broadcaster:
+ tool_contact_controller:
+   ros__parameters:
+     tf_prefix: "$(var tf_prefix)"
++
++robotiq_gripper_controller:
++  ros__parameters:
++    joints:
++      - robotiq_85_left_knuckle_joint
++    command_interfaces:
++      - position
++    state_interfaces:
++      - position
++      - velocity
++    state_publish_rate: 100.0
++    action_monitor_rate: 20.0
++    allow_partial_joints_goal: false
+diff --git a/ur_robot_driver/hardware_interface_plugin.xml b/ur_robot_driver/hardware_interface_plugin.xml
+index b5030f5..c671f39 100644
+--- a/ur_robot_driver/hardware_interface_plugin.xml
++++ b/ur_robot_driver/hardware_interface_plugin.xml
+@@ -6,4 +6,9 @@
+ 		ROS2 Control System Driver for the Universal Robots series.
+     </description>
+   </class>
++  <class name="ur_robot_driver/URHardwareInterface" 
++       type="ur_robot_driver::URPositionHardwareInterface" 
++       base_class_type="hardware_interface::SystemInterface">
++  <description>Universal Robots Hardware Interface</description>
++</class>
+ </library>
