@@ -2,7 +2,7 @@ import rclpy
 from rclpy.node import Node
 from rclpy.action import ActionClient
 from moveit_msgs.action import MoveGroup
-from moveit_msgs.msg import Constraints, JointConstraint, PositionIKRequest
+from moveit_msgs.msg import Constraints, PositionConstraint, OrientationConstraint, JointConstraint,PositionIKRequest
 from moveit_msgs.srv import GetPositionIK
 from control_msgs.action import FollowJointTrajectory
 from trajectory_msgs.msg import JointTrajectoryPoint
@@ -196,9 +196,9 @@ class UR12eExtendedPlanner(Node):
         goal_msg.request.max_acceleration_scaling_factor = float(speed) # Good to scale acceleration too
         return self._move_group_client.send_goal_async(goal_msg)
 
-    def jmove_plan_sync(self, joint_vector):
+    def jmove_plan_sync(self, joint_vector, speed=0.1):
         """Planned move with collision avoidance (Sync)."""
-        future = self.jmove_plan_async(joint_vector)
+        future = self.jmove_plan_async(joint_vector, speed)
         if not future: return False
         rclpy.spin_until_future_complete(self, future)
         handle = future.result()
@@ -284,14 +284,85 @@ class UR12eExtendedPlanner(Node):
         rclpy.spin_until_future_complete(self, res_future)
         return res_future.result().status == GoalStatus.STATUS_SUCCEEDED
 
-    def move_plan_xyz_async(self, x, y, z, frame_id="base_link"):
+    def move_plan_xyz_async(self, x, y, z, speed=0.1, frame_id="base_link"):
         """Asynchronous planned move to XYZ (Pointing Straight Down)."""
-        return self.move_plan_xyz_theta_async(x, y, z, 0.0, frame_id)
+        return self.move_plan_xyz_theta_async(x, y, z, 0.0, speed, frame_id)
 
-    def move_plan_xyz_sync(self, x, y, z, frame_id="base_link"):
+    def move_plan_xyz_sync(self, x, y, z, speed=0.1, frame_id="base_link"):
         """Synchronous planned move to XYZ (Pointing Straight Down)."""
-        return self.move_plan_xyz_theta_sync(x, y, z, 0.0, frame_id)
+        return self.move_plan_xyz_theta_sync(x, y, z, 0.0, speed, frame_id)
     
+    def move_pose_plan_async(self, pose, speed=0.1):
+        """Planned move to a geometry_msgs/Pose with collision avoidance (Async)."""
+        if not self._move_group_client.wait_for_server(timeout_sec=5.0):
+            return None
+        
+        goal_msg = MoveGroup.Goal()
+        goal_msg.request.group_name = "ur_manipulator"
+    
+        # Use the helper to convert the Pose into Joint Constraints via IK
+        # This is more stable for UR arms than raw Pose constraints
+        goal_msg.request.goal_constraints.append(self.pose_to_constraints(pose))
+    
+        goal_msg.request.max_velocity_scaling_factor = float(speed)
+        goal_msg.request.max_acceleration_scaling_factor = float(speed)
+    
+        return self._move_group_client.send_goal_async(goal_msg)
+
+    def move_pose_plan_sync(self, pose, speed=0.1):
+        """Planned move to a geometry_msgs/Pose (Sync)."""
+        future = self.move_pose_plan_async(pose, speed)
+        if not future: return False
+        rclpy.spin_until_future_complete(self, future)
+        handle = future.result()
+        if not handle or not handle.accepted: return False
+        res_future = handle.get_result_async()
+        rclpy.spin_until_future_complete(self, res_future)
+        return res_future.result().status == GoalStatus.STATUS_SUCCEEDED
+
+    def pose_to_constraints(self, pose, tolerance=0.01):
+        """Helper to convert a Pose into MoveIt Constraints using IK."""
+        qx, qy, qz, qw = pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w
+        joint_sol = self.get_ik_solution(pose.position.x, pose.position.y, pose.position.z, qx, qy, qz, qw)
+    
+        con = Constraints()
+        if joint_sol:
+            joint_names = ['shoulder_pan_joint', 'shoulder_lift_joint', 'elbow_joint',
+                           'wrist_1_joint', 'wrist_2_joint', 'wrist_3_joint']
+            for name, pos in zip(joint_names, joint_sol):
+                # JointConstraint is now available from the top-level import
+                jc = JointConstraint(joint_name=name, position=float(pos), 
+                                     tolerance_above=tolerance, tolerance_below=tolerance, weight=1.0)
+                con.joint_constraints.append(jc)
+        else:
+            self.get_logger().error("Failed to calculate IK for Pose constraints!")
+        return con
+
+    def scale_trajectory_speed(self, trajectory, speed_factor):
+        """Scales the timing of a joint trajectory to change execution speed."""
+        if speed_factor <= 0 or speed_factor >= 1.0:
+            return trajectory # Safety fallback
+
+        new_traj = trajectory
+        for i in range(len(new_traj.joint_trajectory.points)):
+            point = new_traj.joint_trajectory.points[i]
+        
+            # FIX: Convert msg Duration to total nanoseconds manually
+            current_total_nano = (point.time_from_start.sec * 10**9) + point.time_from_start.nanosec
+        
+            # Scale the total time
+            new_total_nano = int(current_total_nano / speed_factor)
+        
+            # FIX: Update the message fields directly
+            point.time_from_start.sec = int(new_total_nano // 10**9)
+            point.time_from_start.nanosec = int(new_total_nano % 10**9)
+        
+            # Scale velocities and accelerations (smaller speed factor = slower)
+            point.velocities = [v * speed_factor for v in point.velocities]
+            point.accelerations = [a * speed_factor for a in point.accelerations]
+        
+        return new_traj
+
     def execute_cartesian_trajectory(self, trajectory):
         """Helper to send a computed Cartesian trajectory to the robot controller."""
         if not self._direct_arm_client.wait_for_server(timeout_sec=5.0):
@@ -311,7 +382,7 @@ class UR12eExtendedPlanner(Node):
         return res_future.result().status == GoalStatus.STATUS_SUCCEEDED
 
     def plan_cartesian_path(self, waypoints):
-        """Calls MoveIt service with safety checks."""
+        """Calls MoveIt service with safety checks using provided Pose waypoints."""
         if not self._cartesian_client.wait_for_service(timeout_sec=2.0):
             return None
 
@@ -321,40 +392,76 @@ class UR12eExtendedPlanner(Node):
         req.group_name = "ur_manipulator"
         req.waypoints = waypoints
         req.max_step = 0.01 
-        req.jump_threshold = 0.0 # Strict jump check
+        req.jump_threshold = 0.0 
         req.avoid_collisions = True
 
         future = self._cartesian_client.call_async(req)
         rclpy.spin_until_future_complete(self, future)
         res = future.result()
 
-        # ONLY proceed if 100% of the path is possible (fraction == 1.0)
+        # Only proceed if 100% of the path is possible
         if res and res.fraction >= 1.0:
             return res.solution
         else:
             percent = (res.fraction * 100) if res else 0
-            self.get_logger().error(f"Cartesian Path Failed! Only {percent:.1f}% possible. Avoiding move.")
+            self.get_logger().error(f"Cartesian Path Failed! Only {percent:.1f}% possible.")
             return None
+            
+    def move_pose_cartesian_path(self, pose, speed=0.1):
+        """Executes a straight-line move to a specific geometry_msgs/Pose with speed control."""
+        # Plan the path using the existing plan_cartesian_path method
+        plan = self.plan_cartesian_path([pose])
+    
+        if plan:
+            self.get_logger().info(f"Executing Pose Cartesian path at speed {speed}...")
+            # Scale the trajectory timing before execution
+            scaled_plan = self.scale_trajectory_speed(plan, speed)
+            return self.execute_cartesian_trajectory(scaled_plan)
+        else:
+            # Fallback for safety if the straight line is blocked or impossible
+            self.get_logger().warn("Pose Cartesian path failed. Falling back to standard planning.")
+            # Extract Euler angles if your move_plan_xyz_theta_sync requires them
+            return self.move_pose_plan_sync(pose, speed=speed)
         
-    def move_pose_cartesian_path(self, pose):
-        """Executes a straight-line move to a specific geometry_msgs/Pose."""
-        return self.execute_cartesian_trajectory(self.plan_cartesian_path([pose]))
-
-    def move_xyz_cartesian_path(self, x, y, z):
-        """Straight line move with fallback."""
+    def move_xyz_cartesian_path(self, x, y, z, speed=0.1):
+        """Straight line move to XYZ (pointing down) with speed control."""
         target = Pose()
         target.position = Point(x=float(x), y=float(y), z=float(z))
-        # This keeps the gripper pointing down
+        # Standard downward orientation
         target.orientation = Quaternion(x=0.707, y=0.707, z=0.0, w=0.0)
-        
+    
         plan = self.plan_cartesian_path([target])
         if plan:
-            return self.execute_cartesian_trajectory(plan)
+            self.get_logger().info(f"Executing linear XYZ path at speed {speed}...")
+            scaled_plan = self.scale_trajectory_speed(plan, speed)
+            return self.execute_cartesian_trajectory(scaled_plan)
         else:
-            # FALLBACK: If straight line fails, use a standard curved plan for safety
-            self.get_logger().warn("Falling back to standard jmove_plan for safety.")
-            return self.move_plan_xyz_theta_sync(x, y, z, 0.0)
-        
+            self.get_logger().warn("Cartesian path failed. Falling back to standard planned move.")
+            return self.move_plan_xyz_sync(x, y, z, speed=speed)   
+             
+    def move_xyz_theta_cartesian_path(self, x, y, z, theta_rad, speed=0.1):
+        """Straight line move with custom wrist rotation and speed control."""
+        # Orientation logic for top-down pick with twist
+        qx = math.cos(theta_rad / 2.0)
+        qy = -math.sin(theta_rad / 2.0)
+        qz, qw = 0.0, 0.0 
+
+        target = Pose()
+        target.position = Point(x=float(x), y=float(y), z=float(z))
+        target.orientation = Quaternion(x=qx, y=qy, z=qz, w=qw)
+    
+        plan = self.plan_cartesian_path([target])
+    
+        if plan:
+            self.get_logger().info(f"Executing Cartesian path at speed {speed}...")
+            # Scale the plan before sending it to the controller
+            scaled_plan = self.scale_trajectory_speed(plan, speed)
+            return self.execute_cartesian_trajectory(scaled_plan)
+        else:
+            self.get_logger().warn("Cartesian path failed. Falling back to curved plan.")
+            # Fallback to your standard planned move if straight line is impossible
+            return self.move_plan_xyz_theta_sync(x, y, z, theta_rad, speed=speed)   
+
     def move_until_contact_ros_native(self):
         msg = String()
         msg.data = (
@@ -409,18 +516,76 @@ def main(args=None):
     planner = UR12eExtendedPlanner()
     
     # 1. Move to Home (Planned/Sync)
-    planner.jmove_plan_sync(planner.home_seed)
+    planner.jmove_plan_sync(planner.home_seed,speed=0.5)
     
     # 2. Test Cartesian Planned Move (Sync)
     planner.get_logger().info("Executing move_plan_xyz_theta_sync...")
-    planner.move_plan_xyz_theta_sync(0.2, 0.6, 0.5, math.radians(-45))
+    planner.move_plan_xyz_theta_sync(0.2, 0.6, 0.5, math.radians(-45), speed=0.5)
     
     # 3. Test Cartesian Planned Move (Async)
     planner.get_logger().info("Starting move_plan_xyz_async...")
-    f = planner.move_plan_xyz_async(0.2, 0.4, 0.3)
+    f = planner.move_plan_xyz_async(0.2, 0.9, 0.5, speed=0.5)
     if f:
         rclpy.spin_until_future_complete(planner, f)
         planner.get_logger().info("Cartesian plan accepted and moving...")
+
+    # 4. Test the Cartesian Path (Straight Line) to a target
+    # Moving 20cm along the X-axis in a perfectly straight line
+    target_x, target_y, target_z = 0.1, 0.8, 0.4
+    planner.get_logger().info(f"Testing straight-line Cartesian path to: {target_x}, {target_y}, {target_z}")
+    
+    success = planner.move_xyz_cartesian_path(target_x, target_y, target_z)
+    
+    if success:
+        planner.get_logger().info("Cartesian move successful!")
+    else:
+        planner.get_logger().error("Cartesian move failed or fell back to standard planning.")
+
+    planner.get_logger().info(f"Testing straight-line Cartesian vertical path to: {target_x}, {target_y}, {target_z-0.1}, {45}")
+    
+
+    # Test a 10cm perfectly straight vertical descent at a 45-degree wrist angle
+    success=planner.move_xyz_theta_cartesian_path(target_x, target_y, target_z - 0.1, math.radians(45), speed=0.2)
+    if success:
+        planner.get_logger().info("Cartesian move successful!")
+    else:
+        planner.get_logger().error("Cartesian move failed or fell back to standard planning.")
+
+
+    # Define a test target pose
+    test_pose = Pose()
+    test_pose.position = Point(x=0.3, y=0.5, z=0.4)
+    
+    # Set orientation (pointing down, 45-degree twist)
+    # Using the same math as your move_xyz_theta functions
+    theta_rad = math.radians(45)
+    test_pose.orientation.x = math.cos(theta_rad / 2.0)
+    test_pose.orientation.y = -math.sin(theta_rad / 2.0)
+    test_pose.orientation.z = 0.0
+    test_pose.orientation.w = 0.0
+
+    planner.get_logger().info("Testing move_pose_cartesian_path...")
+    
+    # Execute the move at a slow, controlled speed (5%)
+    success = planner.move_pose_cartesian_path(test_pose, speed=0.05)
+    
+    if success:
+        planner.get_logger().info("Pose Cartesian move completed successfully.")
+    else:
+        planner.get_logger().error("Pose Cartesian move failed.")
+
+    # Test 1: Linear XYZ move at very slow speed (2%)
+    planner.get_logger().info("Testing slow linear XYZ move...")
+    planner.move_xyz_cartesian_path(0.3, 0.5, 0.4, speed=0.02)
+    
+    # Test 2: Pose Plan (curved path) to a specific rotation
+    planner.get_logger().info("Testing Pose Plan move...")
+    target_pose = Pose()
+    target_pose.position = Point(x=0.1, y=0.8, z=0.5)
+    # 90-degree wrist twist
+    target_pose.orientation = Quaternion(x=0.0, y=1.0, z=0.0, w=0.0) 
+    planner.move_pose_plan_sync(target_pose, speed=0.1)
+
 
     planner.destroy_node()
     rclpy.shutdown()

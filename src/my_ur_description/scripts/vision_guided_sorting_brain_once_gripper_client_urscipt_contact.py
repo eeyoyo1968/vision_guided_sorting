@@ -96,7 +96,8 @@ class VisionSortingBrainOnce(UR12eExtendedPlanner):
             self.move_plan_xyz_theta_sync(x_target, y_target, z_pick + 0.1, angle_rad, speed=0.1)
             
             # 1. Approach to 3cm above target
-            self.move_plan_xyz_theta_sync(x_target, y_target, z_pick + 0.01, angle_rad, speed=0.02)
+            #self.move_plan_xyz_theta_sync(x_target, y_target, z_pick + 0.01, angle_rad, speed=0.02)
+            self.move_xyz_theta_cartesian_sync(x_target, y_target, z_pick + 0.01, angle_rad, speed=0.02)
 
             if z_pick < 0.28:
                 self.get_logger().info("Executing Smart Async Touch...")
@@ -122,11 +123,11 @@ class VisionSortingBrainOnce(UR12eExtendedPlanner):
                 time.sleep(1.0)
             else:
                 # Normal pick for tall objects
-                self.move_plan_xyz_theta_sync(x_target, y_target, z_pick, angle_rad)
+                self.move_plan_xyz_theta_sync(x_target, y_target, z_pick, angle_rad, speed=0.02)
                 self.set_gripper(self.GRIPPER_CLOSED)
             
             # Lift
-            self.move_plan_xyz_theta_sync(x_target, y_target, z_pick + 0.15, angle_rad)
+            self.move_plan_xyz_theta_sync(x_target, y_target, z_pick + 0.15, angle_rad, speed=0.1)
             
             # Sort
             if self.current_class == "glove":
