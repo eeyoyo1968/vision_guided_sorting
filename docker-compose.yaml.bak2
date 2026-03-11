@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  simulator:
+    image: universalrobots/ursim_e-series:latest
+    container_name: simulator
+    network_mode: host
+    volumes:
+      # Map the entire local 'urcaps' folder to the URSim bundle folder
+      - ./urcaps:/ursim/programs.sdk/GUI/bundle    
+    environment:
+      - UR_TYPE=ur12e
+    restart: unless-stopped
+
+  ros_driver:
+    image: ur_humble_workcell:latest
+    container_name: ros_driver
+    network_mode: host
+    privileged: true
+    ipc: host # Shared memory for faster communication
+    volumes:
+      - /home/yoyo/humble_ws:/ros2_ws
+      - /tmp/.X11-unix:/tmp/.X11-unix # Allows RViz to open on your screen
+    environment:
+      - DISPLAY=${DISPLAY}
+    stdin_open: true
+    tty: true
+    depends_on:
+      - simulator

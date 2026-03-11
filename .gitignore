@@ -1,0 +1,12 @@
+# Ignore ROS build artifacts
+build/
+install/
+log/
+
+# Ignore Python cache
+**/__pycache__/
+**/*.pyc
+
+# Ignore local IDE settings
+.vscode/
+.idea/

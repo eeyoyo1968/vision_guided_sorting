@@ -1,0 +1,32 @@
+controller_manager:
+  ros__parameters:
+    update_rate: 500
+
+    joint_state_broadcaster:
+      type: joint_state_broadcaster/JointStateBroadcaster
+
+    scaled_joint_trajectory_controller:
+      type: ur_controllers/ScaledJointTrajectoryController
+
+    robotiq_gripper_controller:
+      type: joint_trajectory_controller/JointTrajectoryController
+
+robotiq_gripper_controller:
+  ros__parameters:
+    joints:
+      - robotiq_85_left_knuckle_joint
+    command_interfaces:
+      - position
+    state_interfaces:
+      - position
+    # Interpolation is key: it helps the controller calculate 
+    # smooth movement even without velocity feedback.
+    interpolation_method: splines
+    state_publish_rate: 50.0
+    action_monitor_rate: 10.0
+    allow_partial_joints_goal: true
+    open_loop_control: true
+    constraints:
+      stopped_velocity_tolerance: 0.01
+      goal_time: 0.0
+      robotiq_85_left_knuckle_joint: { trajectory: 0.2, goal: 0.1 }

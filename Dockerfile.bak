@@ -1,0 +1,30 @@
+FROM osrf/ros:humble-desktop
+
+# Prevent interactive prompts during installation
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install dependencies for UR and Robotiq
+RUN apt-get update && apt-get install -y \
+    python3-pip \
+    python3-colcon-common-extensions \
+    ros-humble-ur-robot-driver \
+    ros-humble-moveit \
+    ros-humble-robotiq-description \
+    ros-humble-gripper-controllers \
+    ros-humble-ros2-control \
+    ros-humble-ros2-controllers \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install specific Python libraries often used with Robotiq
+RUN pip3 install minimalmodbus
+
+# Set up the workspace
+WORKDIR /ros2_ws
+
+# Source ROS automatically in every new terminal
+RUN echo "source /opt/ros/humble/setup.bash" >> ~/.bashrc
+RUN echo "if [ -f /ros2_ws/install/setup.bash ]; then source /ros2_ws/install/setup.bash; fi" >> ~/.bashrc
+
+ENTRYPOINT ["/ros-entrypoint.sh"]
+CMD ["bash"]
